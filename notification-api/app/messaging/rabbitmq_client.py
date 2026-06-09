@@ -1,3 +1,4 @@
+import os
 import json
 import pika
 from loguru import logger
@@ -13,8 +14,8 @@ class RabbitMQPublisher:
         try:
             self.connection = pika.BlockingConnection(
                 pika.ConnectionParameters(
-                    host="localhost",
-                    port=5672,
+                    host=os.getenv("RABBITMQ_HOST","localhost"),
+                    port=int(os.getenv("RABBITMQ_PORT","5672")),
                     heartbeat=600
                 )
             )
