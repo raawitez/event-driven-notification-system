@@ -1,10 +1,11 @@
+import os
 import json
 import redis
 from loguru import logger
 
 redis_client = redis.Redis(
-    host="localhost",
-    port=6379,
+    host=os.getenv("REDIS_HOST","localhost"),
+    port=int(os.getenv("REDIS_PORT","6379")),
     db=0,
     decode_responses=True
 )
