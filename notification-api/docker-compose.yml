@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine        
+    container_name: notification_redis
+    ports:
+      - "6379:6379"            
+    restart: unless-stopped    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: notification_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagonstics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  api:
+    build:
+      context: .               
+      dockerfile: Dockerfile   
+    container_name: notification_api
+    ports:
+      - "8000:8000"            
+    env_file:
+      - .env                   
+    environment:
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs       
+      - ./notification.db:/app/notification.db  
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker.Dockerfile
+    container_name: notification_worker
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped    
+    volumes:
+      - ./logs:/app/logs
+      - ./notification.db:/app/notification.db
