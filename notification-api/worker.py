@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import signal
@@ -106,6 +107,19 @@ def on_message(ch, method, properties, body):
             requeue=True
         )
 
+def get_connection_params():
+    rabbitmq_url = os.getenv("RABBITMQ_URL")
+
+    if rabbitmq_url:
+        params = pika.URLParameters(rabbitmq_url)
+        params.socket_timeout = 5
+        return params
+
+    return pika.ConnectionParameters(
+        host=os.getenv("RABBITMQ_HOST", "localhost"),
+        port=int(os.getenv("RABBITMQ_PORT", "5672")),
+        heartbeat=600
+    )
 
 def main():
     Base.metadata.create_all(bind=engine)
@@ -116,11 +130,7 @@ def main():
 
     logger.info("Connecting to RabbitMQ...")
     connection = pika.BlockingConnection(
-        pika.ConnectionParameters(
-            host="localhost",
-            port=5672,
-            heartbeat=600
-        )
+        get_connection_params()
     )
     channel = connection.channel()
     logger.info(" Connected to RabbitMQ")
