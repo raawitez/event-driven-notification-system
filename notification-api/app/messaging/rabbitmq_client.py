@@ -10,16 +10,25 @@ class RabbitMQPublisher:
         self.connection = None
         self.channel    = None
 
+    def _get_connection_params(self):
+        rabbitmq_url = os.getenv("RABBITMQ_URL")
+
+        if rabbitmq_url:
+            params = pika.URLParameters(rabbitmq_url)
+            params.socket_timeout = 5
+            return params
+        else:
+            return pika.ConnectionParameters(
+                host=os.getenv("RABBITMQ_HOST", "localhost"),
+                port=int(os.getenv("RABBITMQ_PORT", "5672")),
+                heartbeat=600
+            )
+
     def connect(self):
         try:
-            self.connection = pika.BlockingConnection(
-                pika.ConnectionParameters(
-                    host=os.getenv("RABBITMQ_HOST","localhost"),
-                    port=int(os.getenv("RABBITMQ_PORT","5672")),
-                    heartbeat=600
-                )
-            )
-            self.channel = self.connection.channel()
+            params = self._get_connection_params()
+            self.connection = pika.BlockingConnection(params)
+            self.channel    = self.connection.channel()
             logger.info("RabbitMQ publisher connected")
         except Exception as e:
             logger.warning(f"RabbitMQ connection failed: {e}")
@@ -30,42 +39,29 @@ class RabbitMQPublisher:
         try:
             if self.connection and not self.connection.is_closed:
                 self.connection.close()
-                logger.info("RabbitMQ publisher disconnected")
         except Exception as e:
             logger.warning(f"RabbitMQ disconnect error: {e}")
 
     def publish(self, queue_name: str, event: dict) -> bool:
         if not self.channel:
-            logger.warning(
-                f"RabbitMQ unavailable — "
-                f"event {event.get('event')} not published"
-            )
+            logger.warning("RabbitMQ unavailable — skipping event")
             return False
-
         try:
-            self.channel.queue_declare(
-                queue=queue_name,
-                durable=True
-            )
-
+            self.channel.queue_declare(queue=queue_name, durable=True)
             self.channel.basic_publish(
-                exchange="",             
-                routing_key=queue_name,  
-                body=json.dumps(event),  
-                properties=pika.BasicProperties(
-                    delivery_mode=2      
-                )
+                exchange="",
+                routing_key=queue_name,
+                body=json.dumps(event),
+                properties=pika.BasicProperties(delivery_mode=2)
             )
-
             logger.info(
                 f"[MQ] Published '{event.get('event')}' "
                 f"notification_id={event.get('notification_id')}"
             )
             return True
-
         except Exception as e:
             logger.error(f"[MQ] Publish failed: {e}")
-            self.connect()   
+            self.connect()
             return False
 
 
